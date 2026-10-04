@@ -1,0 +1,102 @@
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  function normKey(h) {
+    return String(h || '')
+      .trim()
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "_");
+  }
+
+  function normTerminal(term) {
+    var txt = String(term || '').trim().toUpperCase();
+    var match = txt.match(/T\d+|\d+/);
+    return match ? 'T' + match[0].replace('T', '') : txt;
+  }
+
+  function normTurno(tur) {
+    return String(tur || '').trim().toUpperCase();
+  }
+
+  // 1. Ler LIDERES
+  var sheetLideres = ss.getSheetByName("LIDERES");
+  var dataLideres = sheetLideres ? sheetLideres.getDataRange().getValues() : [];
+  var headersLideres = dataLideres.length > 0 ? dataLideres[0] : [];
+  var rowsLideres = dataLideres.slice(1);
+  
+  var lideres = [];
+  rowsLideres.forEach(function(row) {
+    var obj = {};
+    headersLideres.forEach(function(h, idx) {
+      obj[normKey(h)] = row[idx];
+    });
+    
+    var st = String(obj['status'] || '').trim().toUpperCase();
+    if (st === 'A' || st === 'ATIVO') {
+      var rawTerm = obj['terminal'] || obj['_terminal'] || '';
+      var rawTurno = obj['turno'] || '';
+      
+      lideres.push({
+        chapa: String(obj['chapa'] || ''),
+        nome_lider: String(obj['nome_do_lider'] || obj['nome_lider'] || obj['nome'] || '').trim(),
+        _terminal: rawTerm,
+        turno: rawTurno,
+        term_norm: normTerminal(rawTerm),
+        turno_norm: normTurno(rawTurno),
+        status: 'A'
+      });
+    }
+  });
+
+  // 2. Ler COLABORADORES
+  var sheetColab = ss.getSheetByName("COLABORADORES");
+  var dataColab = sheetColab ? sheetColab.getDataRange().getValues() : [];
+  var headersColab = dataColab.length > 0 ? dataColab[0] : [];
+  var rowsColab = dataColab.slice(1);
+  
+  var colaboradores = [];
+  rowsColab.forEach(function(row) {
+    var obj = {};
+    headersColab.forEach(function(h, idx) {
+      obj[normKey(h)] = row[idx];
+    });
+    
+    var st = String(obj['status'] || obj['situacao'] || '').trim().toUpperCase();
+    if (st === 'A' || st === 'ATIVO') {
+      var rawTerm = obj['terminal'] || '';
+      var rawTurno = obj['turno'] || '';
+      
+      colaboradores.push({
+        chapa: String(obj['chapa'] || ''),
+        colaborador: String(obj['colaboradores'] || obj['colaborador'] || obj['nome'] || '').trim(),
+        _terminal: rawTerm,
+        turno: rawTurno,
+        horario: obj['horario'] || '',
+        entrada: obj['entrada'] || '',
+        saida: obj['saida'] || '',
+        term_norm: normTerminal(rawTerm),
+        turno_norm: normTurno(rawTurno),
+        status: 'A'
+      });
+    }
+  });
+
+  var payload = {
+    lideres: lideres,
+    colaboradores: colaboradores
+  };
+
+  var callback = e.parameter.callback;
+  var jsonOutput = JSON.stringify(payload);
+
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + "(" + jsonOutput + ")")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  return ContentService
+    .createTextOutput(jsonOutput)
+    .setMimeType(ContentService.MimeType.JSON);
+}
